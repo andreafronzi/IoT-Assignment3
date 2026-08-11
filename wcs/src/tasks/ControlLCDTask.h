@@ -10,19 +10,13 @@ class ControlLCDTask : public Task
 {
 
 public:
-    ControlLCDTask(wcs_state *state, uint8_t *sm_degree);
+    ControlLCDTask();
     void tick();
 
 private:
-    void setState(wcs_state newState);
-    long elapsedTimeInState();
-    bool checkAndSetJustEntered();
-
-    long stateTimestamp;
-    bool justEntered;
-
-    uint8_t *sm_degree;
-    wcs_state *currentState;
+    //poichi l'LCD risulta lento cancellare e riscriverre lo stesso stato risulterebbe pesatente. Cosicche, per essere per migliorare la velocita, si e scelto di aggiungere tali var.
+    wcs_state_t last_state;
+    int lastValveOpening;
 
     LiquidCrystal_I2C *lcd;
 };
