@@ -10,6 +10,7 @@ ControlLCDTask::ControlLCDTask()
 
 void ControlLCDTask::tick()
 {
+    //visto che il processo di visualizzazione su LCD risulta lento, si e scelto di aggiornare lo schermo solo quando lo stato o l'apertura della valvola cambiano
     if (this->last_state != currentState || this->lastValveOpening != currentValveOpening)
     {
         this->last_state = currentState;
