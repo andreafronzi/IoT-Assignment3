@@ -3,31 +3,26 @@
 
 #include "kernel/Task.h"
 #include <LiquidCrystal_I2C.h>
-#include "devices/led/Led.h"
 #include "config.h"
+#include <devices/ServoMotor/ServoMotor.h>
 
-class ControlPanelTask : public Task
+class ControlLCDTask : public Task
 {
 
 public:
-    ControlPanelTask(hangar_state *hangarState, alarm_state *alarmState, bool *blinking);
+    ControlLCDTask(wcs_state *state, uint8_t *sm_degree);
     void tick();
 
 private:
-    typedef enum 
-    {
-        UNCONNECTED,
-        CONNECTED,
-    } ;
-
-    void updateState();
-    void setState(lcdState state);
+    void setState(wcs_state newState);
     long elapsedTimeInState();
-    void log(const String &msg);
     bool checkAndSetJustEntered();
 
     long stateTimestamp;
     bool justEntered;
+
+    uint8_t *sm_degree;
+    wcs_state *currentState;
 
     LiquidCrystal_I2C *lcd;
 };

@@ -7,7 +7,7 @@
 Scheduler sched;
 
 /* Global variables declared extern in config.h */
-bool connected;
+wcs_state state;
 
 void setup()
 {
