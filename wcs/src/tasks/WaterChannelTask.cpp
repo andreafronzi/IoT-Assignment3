@@ -14,6 +14,8 @@ WaterChannelTask::WaterChannelTask()
     this->potentiometer->sync();
 
     this->button = new ButtonImpl(BUTTON_PIN);
+
+    this->lastButtonState = false;
 }
 
 void WaterChannelTask::tick()
@@ -34,6 +36,7 @@ void WaterChannelTask::tick()
             currentState = AUTOMATIC;
         }
     }
+    this->lastButtonState = isButtonPressed;
 
     switch (currentState)
     {
