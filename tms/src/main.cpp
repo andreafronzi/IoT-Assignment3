@@ -20,7 +20,6 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 
 boolean justEntered;
-boolean reconnection;
 
 Sonar sonar;
 
@@ -33,6 +32,9 @@ int waterLevel = 0;
 
 void setup()
 {
+  randomSeed(micros());
+  setupWifi();
+  setupMqtt();
   Serial.begin(115200);
   xTaskCreate(communicationTask, "Communication Task", 256, NULL, 1, &communicationTaskHandle);
   xTaskCreate(sensorTask, "Sensor Task", 256, NULL, 1, &sensorTaskHandle);
@@ -52,6 +54,18 @@ void setupWifi()
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 }
+
+void setupMqtt()
+{
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
+}
+
+void callback(char *topic, byte *payload, unsigned int length)
+{
+  Serial.println(String("Message arrived on [") + topic + "] len: " + length + " txt: " + String((char *)payload, length));
+}
+
 
 void reconnect()
 {
