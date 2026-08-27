@@ -1,4 +1,4 @@
-package esiot.backend;
+package backend;
 
 public class DataPoint {
 	private double value;

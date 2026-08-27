@@ -1,6 +1,7 @@
 package serialcommunication;
 
 import java.util.concurrent.*;
+import java.util.function.Consumer;
 import jssc.*;
 
 /**
@@ -11,6 +12,7 @@ public class SerialCommChannel implements CommChannel, SerialPortEventListener {
 	private SerialPort serialPort;
 	private BlockingQueue<String> queue;
 	private StringBuffer currentMsg = new StringBuffer("");
+	private Consumer<String> listener;
 	
 	public SerialCommChannel(String port, int rate) throws Exception {
 		queue = new ArrayBlockingQueue<String>(100);
@@ -28,6 +30,11 @@ public class SerialCommChannel implements CommChannel, SerialPortEventListener {
 
 		// serialPort.addEventListener(this, SerialPort.MASK_RXCHAR);
 		serialPort.addEventListener(this);
+	}
+
+	@Override
+	public void registerListener(Consumer<String> listener) {
+		this.listener = listener;
 	}
 
 	@Override
@@ -92,7 +99,11 @@ public class SerialCommChannel implements CommChannel, SerialPortEventListener {
         				String msg2 = currentMsg.toString();
         				int index = msg2.indexOf("\n");
             			if (index >= 0) {
-            				queue.put(msg2.substring(0, index));
+            				String completeMsg = msg2.substring(0, index);
+            				queue.put(completeMsg);
+            				if (listener != null) {
+            					listener.accept(completeMsg);
+            				}
             				currentMsg = new StringBuffer("");
             				if (index + 1 < msg2.length()) {
             					currentMsg.append(msg2.substring(index + 1)); 

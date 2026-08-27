@@ -200,100 +200,107 @@
                         suggestedMax: 50
                     },
                     x: {
-                        display: false // Hide time labels for cleaner look
+                        display: true // Show time labels
                     }
                 }
             }
         });
 
-        // Update UI logic
+        // Store the last known state so we can send all fields in POST
+        let lastState = {
+            waterLevel: 0,
+            mode: "NOT-AVAILABLE",
+            valve: 0
+        };
+
         function updateSliderLabel(val) {
             document.getElementById('sliderLabel').innerText = val + '%';
         }
 
-        async function fetchState() {
-            try {
-                const res = await fetch('/api/state');
-                const state = await res.json();
-                
-                // Update mode badge
-                const badge = document.getElementById('modeBadge');
-                badge.innerText = state.mode;
-                badge.className = 'status-badge status-' + state.mode;
-
-                // Update valve text
-                document.getElementById('valveValue').innerText = state.valveOpening + ' %';
-                
-                // Enable/disable slider
-                const manualControls = document.getElementById('manualControls');
-                const slider = document.getElementById('valveSlider');
-                
-                if (state.mode === 'MANUAL') {
-                    manualControls.classList.remove('disabled');
-                    // Only update slider if not currently dragging
-                    if (document.activeElement !== slider) {
-                        slider.value = state.valveOpening;
-                        updateSliderLabel(state.valveOpening);
-                    }
-                } else {
-                    manualControls.classList.add('disabled');
-                    slider.value = state.valveOpening;
-                    updateSliderLabel(state.valveOpening);
-                }
-
-            } catch (err) {
-                console.error("Error fetching state", err);
-                const badge = document.getElementById('modeBadge');
-                badge.innerText = "NOT AVAILABLE";
-                badge.className = 'status-badge status-NOT-AVAILABLE';
-            }
-        }
-
-        async function fetchData() {
+        async function fetchSystemData() {
             try {
                 const res = await fetch('/api/data');
                 const data = await res.json();
                 
-                // Update Chart
-                const labels = data.map(d => new Date(d.time).toLocaleTimeString());
-                const values = data.map(d => d.value);
+                // Update our last known state
+                lastState = data;
+
+                // Update UI: Mode
+                const badge = document.getElementById('modeBadge');
+                badge.innerText = data.mode;
+                badge.className = 'status-badge status-' + data.mode;
+
+                // Update UI: Valve
+                document.getElementById('valveValue').innerText = data.valve + ' %';
                 
-                waterChart.data.labels = labels;
-                waterChart.data.datasets[0].data = values;
+                // Enable/disable slider based on mode
+                const manualControls = document.getElementById('manualControls');
+                const slider = document.getElementById('valveSlider');
+                
+                if (data.mode === 'MANUAL') {
+                    manualControls.classList.remove('disabled');
+                    if (document.activeElement !== slider) {
+                        slider.value = data.valve;
+                        updateSliderLabel(data.valve);
+                    }
+                } else {
+                    manualControls.classList.add('disabled');
+                    slider.value = data.valve;
+                    updateSliderLabel(data.valve);
+                }
+
+                // Update Chart with the new single value
+                const now = new Date().toLocaleTimeString();
+                
+                // Add new data point
+                waterChart.data.labels.push(now);
+                waterChart.data.datasets[0].data.push(data.waterLevel);
+                
+                // Keep only the last 10 points on the chart
+                if (waterChart.data.labels.length > 10) {
+                    waterChart.data.labels.shift();
+                    waterChart.data.datasets[0].data.shift();
+                }
                 waterChart.update();
+
             } catch (err) {
                 console.error("Error fetching data", err);
+                const badge = document.getElementById('modeBadge');
+                badge.innerText = "NOT-AVAILABLE";
+                badge.className = 'status-badge status-NOT-AVAILABLE';
             }
         }
 
         // Control Actions
         async function setMode(mode) {
-            await fetch('/api/mode', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode: mode })
-            });
-            fetchState(); // Immediate UI update
+            lastState.mode = mode;
+            await sendPostData(lastState);
+            fetchSystemData(); // Immediate UI update
         }
 
         async function setValve(val) {
-            await fetch('/api/valve', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ valve: parseInt(val) })
-            });
-            fetchState();
+            lastState.valve = parseInt(val);
+            await sendPostData(lastState);
+            fetchSystemData();
         }
 
-        // Polling loop
-        setInterval(() => {
-            fetchState();
-            fetchData();
-        }, 1000);
+        async function sendPostData(payload) {
+            try {
+                await fetch('/api/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            } catch (err) {
+                console.error("Error posting data", err);
+            }
+        }
+
+        // Polling loop every second
+        setInterval(fetchSystemData, 1000);
         
         // Initial fetch
-        fetchState();
-        fetchData();
+        fetchSystemData();
     </script>
 </body>
 </html>
