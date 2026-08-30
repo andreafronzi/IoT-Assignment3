@@ -1,12 +1,10 @@
 package backend;
 
-import java.util.LinkedList;
 import java.util.Objects;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.json.Json;
-import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
@@ -17,7 +15,6 @@ import serialcommunication.ArduinoData;
 public class DataService extends AbstractVerticle {
 
     private int port;
-    private static final int MAX_SIZE = 10;
     private EspData espData;
     private ArduinoData arduinoData;
 
@@ -63,7 +60,7 @@ public class DataService extends AbstractVerticle {
             if (res.containsKey("valve")) {
                 this.arduinoData.setValve(res.getDouble("valve"));
             }
-            
+            this.espData.setTime(System.currentTimeMillis());
             // Chiude la richiesta HTTP dicendo al client che è andata a buon fine
             response.setStatusCode(200).end();
         }
@@ -71,9 +68,9 @@ public class DataService extends AbstractVerticle {
 
     private void handleGetData(final RoutingContext routingContext) {
         final JsonObject data = new JsonObject()
-        .put("waterLevel", this.espData.getWaterLevel())
-        .put("mode", this.arduinoData.getState().toString())
-        .put("valve", this.arduinoData.getValve());
+                .put("waterLevel", this.espData.getWaterLevel())
+                .put("mode", this.arduinoData.getCurrentState().toString())
+                .put("valve", this.arduinoData.getCurrentValve());
 
         routingContext.response()
                 .end(Json.encode(data));

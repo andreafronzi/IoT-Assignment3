@@ -1,6 +1,7 @@
 package backend;
 
 import mqtt.EspData;
+import serialcommunication.ArduinoData;
 import serialcommunication.SerialCommChannel;
 
 public class Cus {
@@ -10,6 +11,7 @@ public class Cus {
     private SerialCommChannel serialChannel;
 
     private final EspData espData;
+    private final ArduinoData arduinoData;
 
     private final double L1 = 5.0;
     private final double L2 = 10.0;
@@ -17,7 +19,6 @@ public class Cus {
     private final double T1 = 5000; // 5 seconds above L1
     private final double T2 = 10000; // 10 seconds without TMS data -> UNCONNECTED
 
-    private long lastTimeTmsMessage;
     private long lastTimeT1LevelExceeded;
 
     private boolean isAboveL1 = false;
@@ -28,9 +29,13 @@ public class Cus {
     private static final String VALVE_HALF_OPEN = "50";
     private static final String VALVE_FULL_OPEN = "100";
 
-    public Cus(final String port, final EspData espData) throws Exception { // mettere channel nel costruttore
+    public Cus(final String port, final EspData espData, final ArduinoData arduinoData) throws Exception { // mettere
+                                                                                                           // channel
+                                                                                                           // nel
+                                                                                                           // costruttore
         this.serialChannel = new SerialCommChannel(port, 9600);
         this.espData = espData;
+        this.arduinoData = arduinoData;
     }
 
     public void run() {
@@ -44,20 +49,17 @@ public class Cus {
 
         while (true) {
 
+            manageState();
+            manageValve();
+            
             // Controllare connessione TMS
-            if (System.currentTimeMillis() - this.lastTimeTmsMessage > T2) {
+            if (System.currentTimeMillis() - this.espData.getTime() > T2) {
                 this.currentState = CusState.UNCONNECTED;
                 sendWcsMode(this.currentState.toString());
             }
 
-            // Ricezione messaggio TMS
-            String rainLevelRaw = receiveTmsMessage(); // Se il messaggio è arrivato e stato è UNCONNECTED, cambiare
-                                                       // stato a AUTOMATIC
-            // Sistemare messaggio per prendere livello acqua
-            this.lastTimeTmsMessage = System.currentTimeMillis();
-
             // Operazioni sul wcs
-            switch (currentState) {
+            switch (this.currentState) {
                 case AUTOMATIC:
                     wcsUpdateAutomatic();
                     break;
@@ -68,16 +70,22 @@ public class Cus {
                     wcsUpdateUnconnected();
                     break;
             }
-
-            // Ricevere messaggio WCS
-            String wcsResponse = receiveWcsMessage();
-
-            // Aggiornare GUI
-            updateGui(rainLevel, wcsResponse);
         }
     }
 
-    private void sendWcsWaterLevel(final String valveLevel) {
+    private void manageState() {
+        this.arduinoData.setCurrent();
+        if (this.currentState != this.arduinoData.getCurrentState()) {
+            this.currentState = this.arduinoData.getCurrentState();
+            sendWcsMode(this.currentState.toString());
+        }
+    }
+    
+    private void manageValve() {
+       this.arduinoData.setCurrentValve();
+    }
+
+    private void sendWcsValveLevel(final String valveLevel) {
         this.serialChannel.sendMsg("SET_VALVE:" + valveLevel);
     }
 
@@ -89,7 +97,7 @@ public class Cus {
         // Controllare se il livello di pioggia è sopra L1 o L2
         if (rainLevel > L2) {
             // Inviare messaggio WCS per aprire valvola al 100%
-            sendWcsWaterLevel(VALVE_FULL_OPEN);
+            sendWcsValveLevel(VALVE_FULL_OPEN);
         } else if (rainLevel > L1) {
             // Inviare messaggio WCS per aprire valvola al 50%
             if (!this.isAboveL1) {
@@ -97,28 +105,25 @@ public class Cus {
                 this.lastTimeT1LevelExceeded = System.currentTimeMillis();
             } else {
                 if (System.currentTimeMillis() - this.lastTimeT1LevelExceeded >= T1) {
-                    sendWcsWaterLevel(VALVE_HALF_OPEN);
+                    sendWcsValveLevel(VALVE_HALF_OPEN);
                 }
             }
         } else {
             // Inviare messaggio WCS per chiudere valvola
             this.isAboveL1 = false;
             this.lastTimeT1LevelExceeded = 0;
-            sendWcsWaterLevel(VALVE_CLOSED);
+            sendWcsValveLevel(VALVE_CLOSED);
         }
     }
 
+    
+
     private void wcsUpdateManual() {
-        rainLevelFromView();
-        sendWcsWaterLevel(Double.toString(rainLevel));
+        sendWcsValveLevel(Double.toString(this.arduinoData.getCurrentValve()));
     }
 
     private void wcsUpdateUnconnected() {
-
+        // Inviare messaggio WCS per chiudere valvola
+        sendWcsValveLevel(VALVE_CLOSED);
     }
-
-    private void rainLevelFromView() {
-        this.rainLevel = // prendere dall html;
-    }
-
 }
