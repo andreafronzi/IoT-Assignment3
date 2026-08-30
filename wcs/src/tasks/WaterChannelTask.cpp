@@ -16,18 +16,17 @@ WaterChannelTask::WaterChannelTask()
     this->button = new ButtonImpl(BUTTON_PIN);
 
     this->lastButtonState = false;
+    this->lastPotValue = -1;
+    this->currentAngle = 0;
 }
 
 void WaterChannelTask::tick()
 {
-    // 1. Gestione della pressione del pulsante per il cambio di modalita
+    // 1. Gestione della pressione del pulsante per il cambio di modalita (supporta anche l'override da UNCONNECTED)
     bool isButtonPressed = this->button->isPressed();
-    // Quando il pulsante viene premuto, si verifica se lo era gia prima per evitare che venga cambiato piu volte ad ogni stato.
-    // Ad esempio se ci si trovasse in in uno stato di MANUAL, si premesse il pulsante, si cambiasse stato, lo scheduler cambiasse
-    // task in esecuzione e ritornasse a questo task, il pulsante sarebbe ancora premuto e quindi si cambierebbe di nuovo stato.
     if (isButtonPressed && !lastButtonState)
     {
-        if (currentState == AUTOMATIC)
+        if (currentState == AUTOMATIC || currentState == UNCONNECTED)
         {
             currentState = MANUAL;
         }
@@ -41,23 +40,39 @@ void WaterChannelTask::tick()
     switch (currentState)
     {
     case MANUAL:
+    {
         this->potentiometer->sync();
-        // Mappiamo la lettura del potenziometro (0.0 .. 1.0) in percentuale (0 .. 100)
-        currentValveOpening = (int)(this->potentiometer->getValue() * 100.0);
-        if (currentValveOpening < 0)
-            currentValveOpening = 0;
-        if (currentValveOpening > 100)
-            currentValveOpening = 100;
+        int potVal = (int)(this->potentiometer->getValue() * 100.0);
+        potVal = constrain(potVal, 0, 100);
+
+        // Se e il primo ciclo o se l'operatore sta muovendo il potenziometro (soglia Hysteresis del 3%)
+        if (this->lastPotValue == -1 || abs(potVal - this->lastPotValue) >= 3)
+        {
+            currentValveOpening = potVal;
+            this->lastPotValue = potVal;
+            targetValveOpening = potVal; // Allinea anche il target desiderato
+        }
+        else if (currentValveOpening != targetValveOpening)
+        {
+            // Se il potenziometro e fermo ma e arrivato un comando dalla Dashboard (via CUS)
+            currentValveOpening = targetValveOpening;
+        }
         this->updateServoPosition(currentValveOpening);
         break;
+    }
 
     case AUTOMATIC:
+        this->lastPotValue = -1; // Reset per reinizializzare alla rientrata in MANUAL
         currentValveOpening = targetValveOpening;
         this->updateServoPosition(currentValveOpening);
         break;
+
     case UNCONNECTED:
+        this->lastPotValue = -1;
+        currentValveOpening = 0;
         this->updateServoPosition(0);
         break;
+
     default:
         break;
     }
@@ -66,6 +81,17 @@ void WaterChannelTask::tick()
 void WaterChannelTask::updateServoPosition(int percentage)
 {
     // Mapping della percentuale (0 .. 100) in un angolo (0 .. 90)
-    int angle = map(percentage, 0, 100, 0, 90);
-    this->canalDoor->setPosition(angle);
+    int targetAngle = map(percentage, 0, 100, 0, 90);
+
+    // Movimento graduale del servomotore per evitare scatti ed eccessivo assorbimento di corrente (step max 5 gradi per tick)
+    if (this->currentAngle < targetAngle)
+    {
+        this->currentAngle += min(5, targetAngle - this->currentAngle);
+    }
+    else if (this->currentAngle > targetAngle)
+    {
+        this->currentAngle -= min(5, this->currentAngle - targetAngle);
+    }
+
+    this->canalDoor->setPosition(this->currentAngle);
 }

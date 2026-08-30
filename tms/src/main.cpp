@@ -109,7 +109,7 @@ void communicationTask(void *parameter)
       }
       break;
     }
-    // aggiungere delay per una frequenza voluta di invio dei messaggi
+    delay(300); 
   }
 }
 
@@ -137,8 +137,8 @@ void sensorTask(void *parameter)
       }
       break;
     }
+    delay(300); 
   }
-  // aggiungere delay per una frequenza voluta di lettura del sensore
 }
 
 void sendMessagge()

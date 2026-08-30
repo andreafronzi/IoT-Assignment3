@@ -21,6 +21,8 @@ private:
     Potentiometer *potentiometer;
 
     bool lastButtonState;
+    int lastPotValue;
+    int currentAngle;
     void updateServoPosition(int percentage);
 };
 
