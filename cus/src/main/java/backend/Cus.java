@@ -13,11 +13,11 @@ public class Cus {
     private final EspData espData;
     private final ArduinoData arduinoData;
 
-    private final double L1 = 5.0;
-    private final double L2 = 10.0;
+    private final double L1 = 60.0;
+    private final double L2 = 75.0;
 
     private final double T1 = 5000; // 5 seconds above L1
-    private final double T2 = 10000; // 10 seconds without TMS data -> UNCONNECTED
+    private final long T2 = 10000; // 10 seconds without TMS data -> UNCONNECTED
 
     private long lastTimeT1LevelExceeded;
 
@@ -29,29 +29,26 @@ public class Cus {
     private static final String VALVE_HALF_OPEN = "50";
     private static final String VALVE_FULL_OPEN = "100";
 
-    public Cus(final String port, final EspData espData, final ArduinoData arduinoData) throws Exception { // mettere
-                                                                                                           // channel
-                                                                                                           // nel
-                                                                                                           // costruttore
-        this.serialChannel = new SerialCommChannel(port, 9600);
+    public Cus(final SerialCommChannel serialChannel, final EspData espData, final ArduinoData arduinoData)
+            throws Exception {
+        this.serialChannel = serialChannel;
         this.espData = espData;
         this.arduinoData = arduinoData;
+        this.currentState = CusState.AUTOMATIC;
     }
 
     public void run() {
 
-        // Controllare connessione TMS NON FATTO
-        // Ricezione messaggio TMS NON FATTO
-        // Controllare se il livello di pioggia è sopra L1 o L2 NON FATTO
-        // Inviare messaggio WCS FATTO
-        // Ricevere messaggio WCS NON FATTO
-        // Aggiornare GUI NON FATTO
-
         while (true) {
-
+            System.out.println("Current state: " + this.currentState + ", Rain level: " + this.espData.getWaterLevel()
+                    + ", Arduino valve: " + this.arduinoData.getCurrentValve() + ", " + "Arduino state: "
+                    + this.arduinoData.getCurrentState() + ", Last tms update: "
+                    + (System.currentTimeMillis() - this.espData.getTime()) + " ms ago" + ", rainlevel: "
+                    + this.espData.getWaterLevel());
             manageState();
             manageValve();
-            
+            manageRainLevel();
+
             // Controllare connessione TMS
             if (System.currentTimeMillis() - this.espData.getTime() > T2) {
                 this.currentState = CusState.UNCONNECTED;
@@ -70,7 +67,16 @@ public class Cus {
                     wcsUpdateUnconnected();
                     break;
             }
+            try {
+                Thread.sleep(100); // Delay di 1 secondo tra le iterazioni del ciclo
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
+    }
+
+    private void manageRainLevel() {
+        this.rainLevel = this.espData.getWaterLevel();
     }
 
     private void manageState() {
@@ -80,9 +86,9 @@ public class Cus {
             sendWcsMode(this.currentState.toString());
         }
     }
-    
+
     private void manageValve() {
-       this.arduinoData.setCurrentValve();
+        this.arduinoData.setCurrentValve();
     }
 
     private void sendWcsValveLevel(final String valveLevel) {
@@ -115,8 +121,6 @@ public class Cus {
             sendWcsValveLevel(VALVE_CLOSED);
         }
     }
-
-    
 
     private void wcsUpdateManual() {
         sendWcsValveLevel(Double.toString(this.arduinoData.getCurrentValve()));

@@ -29,7 +29,9 @@ public class TmsMqttCommunicator {
             client.setCallback(new TmsMqttCallback(this.espData));
             client.connect();
             client.subscribe(topic);
-            System.out.println("MQTT connesso e sottoscritto al topic " + topic);
+            if (client.isConnected()) {
+                System.out.println("MQTT connesso e sottoscritto al topic " + topic);
+            }
         } catch (MqttException e) {
             System.err.println("Fatal error during MQTT initialization: " + e.getMessage());
         }

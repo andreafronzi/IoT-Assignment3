@@ -11,7 +11,7 @@ typedef enum
   NETWORK_ONLINE,
 } communicationState;
 
-communicationState state;
+volatile communicationState state;
 
 TaskHandle_t communicationTaskHandle;
 TaskHandle_t sensorTaskHandle;
@@ -19,40 +19,52 @@ TaskHandle_t sensorTaskHandle;
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-boolean justEntered;
+volatile boolean justEntered;
 
-Sonar sonar;
+ProximitySensor *sonar;
 
-Led ledRed;
-Led ledGreen;
+Led *ledRed;
+Led *ledGreen;
 
 unsigned long lastMsgTime = 0;
 char msg[MSG_BUFFER_SIZE];
-int waterLevel = 0;
+volatile double waterLevel = 0.0;
 
-void setup()
+void sendMessagge()
 {
-  randomSeed(micros());
-  setupWifi();
-  setupMqtt();
-  Serial.begin(115200);
-  xTaskCreate(communicationTask, "Communication Task", 256, NULL, 1, &communicationTaskHandle);
-  xTaskCreate(sensorTask, "Sensor Task", 256, NULL, 1, &sensorTaskHandle);
+  snprintf(msg, sizeof(msg), "%.2f", waterLevel);
+  if (client.connected())
+  {
+    client.publish(topic, msg);
+  }
+}
+
+void callback(char *topic, byte *payload, unsigned int length)
+{
+  Serial.println(String("Message arrived on [") + topic + "] len: " + length + " txt: " + String((char *)payload, length));
 }
 
 void setupWifi()
 {
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED)
+  vTaskDelay(pdMS_TO_TICKS(5000));
+  if (WiFi.status() == WL_CONNECTED)
   {
-    delay(500);
-    Serial.print(".");
+    state = NETWORK_ONLINE;
+    justEntered = true;
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
   }
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  else
+  {
+    state = NETWORK_OFFLINE;
+    justEntered = true;
+    Serial.println("");
+    Serial.println("WiFi connection failed on boot, will retry in background.");
+  }
 }
 
 void setupMqtt()
@@ -61,18 +73,25 @@ void setupMqtt()
   client.setCallback(callback);
 }
 
-void callback(char *topic, byte *payload, unsigned int length)
-{
-  Serial.println(String("Message arrived on [") + topic + "] len: " + length + " txt: " + String((char *)payload, length));
-}
-
-
 void reconnect()
 {
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.println("Reconnecting to WiFi...");
+    WiFi.disconnect();
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED)
+    {
+      vTaskDelay(pdMS_TO_TICKS(5000));
+      Serial.print(".");
+    }
+    Serial.println("\nWiFi reconnected.");
+  }
+
   while (!client.connected())
   {
     // Create a random client ID
-    String clientId = String("waterLevelClient-") + String(random(0xffff), HEX);
+    String clientId = String("clientId-") + String(random(0xffff), HEX);
 
     // Attempt to connect
     if (client.connect(clientId.c_str()))
@@ -81,7 +100,7 @@ void reconnect()
     }
     else
     {
-      delay(5000);
+      vTaskDelay(pdMS_TO_TICKS(5000));
     }
   }
 }
@@ -94,22 +113,27 @@ void communicationTask(void *parameter)
     {
     case NETWORK_OFFLINE:
       reconnect();
-      if (client.connected())
+      if (client.connected() && WiFi.status() == WL_CONNECTED)
       {
         state = NETWORK_ONLINE;
         justEntered = true;
       }
       break;
     case NETWORK_ONLINE:
-      sendMessagge();
-      if (!client.connected())
+      client.loop();
+      if (millis() - lastMsgTime > 1000)
+      {
+        sendMessagge();
+        lastMsgTime = millis();
+      }
+      if (!client.connected() || WiFi.status() != WL_CONNECTED)
       {
         state = NETWORK_OFFLINE;
         justEntered = true;
       }
       break;
     }
-    delay(300); 
+    vTaskDelay(pdMS_TO_TICKS(300));
   }
 }
 
@@ -122,32 +146,40 @@ void sensorTask(void *parameter)
     case NETWORK_OFFLINE:
       if (justEntered)
       {
-        ledRed.switchOn();
-        ledGreen.switchOff();
+        ledRed->switchOn();
+        ledGreen->switchOff();
         justEntered = false;
       }
-      waterLevel = sonar.getDistance();
       break;
     case NETWORK_ONLINE:
       if (justEntered)
       {
-        ledRed.switchOff();
-        ledGreen.switchOn();
+        ledRed->switchOff();
+        ledGreen->switchOn();
         justEntered = false;
+      }
+      if(double tmp = sonar->getDistance() > TANK_HEIGHT){
+        waterLevel = 0.0;
+      } else {
+        waterLevel = TANK_HEIGHT - tmp;
       }
       break;
     }
-    delay(300); 
+    vTaskDelay(pdMS_TO_TICKS(300));
   }
 }
 
-void sendMessagge()
+void setup()
 {
-  snprintf(msg, sizeof(msg), "%.2f", waterLevel);
-  if (client.connected())
-  {
-    client.publish(topic, msg);
-  }
+  Serial.begin(115200);
+  ledRed = new Led(LED_RED_PIN);
+  ledGreen = new Led(LED_GREEN_PIN);
+  sonar = new Sonar(ECHO_PIN, TRIG_PIN, MAX_TIME);
+  randomSeed(micros());
+  setupWifi();
+  setupMqtt();
+  xTaskCreate(communicationTask, "CommunicationTask", 4096, NULL, 1, &communicationTaskHandle);
+  xTaskCreate(sensorTask, "SensorTask", 2048, NULL, 1, &sensorTaskHandle);
 }
 
 void loop()

@@ -30,6 +30,7 @@ public class DataService extends AbstractVerticle {
         router.route().handler(BodyHandler.create());
         router.post("/api/data").handler(this::handleAddNewData);
         router.get("/api/data").handler(this::handleGetData);
+        
         vertx
                 .createHttpServer()
                 .requestHandler(router)

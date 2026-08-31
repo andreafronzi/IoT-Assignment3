@@ -20,6 +20,7 @@ public class TmsMqttCallback implements MqttCallback {
         String payload = new String(message.getPayload());
         Double waterLevel = Double.parseDouble(payload);
         espData.setWaterLevel(waterLevel);
+        espData.setTime(System.currentTimeMillis());
     }
 
     @Override
