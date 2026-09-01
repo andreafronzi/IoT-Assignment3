@@ -59,7 +59,7 @@ void WaterChannelTask::tick()
             currentValveOpening = targetValveOpening;
             this->updateServoPosition(currentValveOpening);
         }
-        else if (currentValveOpening != potVal)
+        else if (currentValveOpening != this->lastPotValue)
         {
             currentValveOpening = potVal;
             this->updateServoPosition(currentValveOpening);
