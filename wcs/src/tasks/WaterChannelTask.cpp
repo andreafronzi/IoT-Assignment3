@@ -43,21 +43,27 @@ void WaterChannelTask::tick()
     {
         this->potentiometer->sync();
         int potVal = (int)(this->potentiometer->getValue() * 100.0);
-        potVal = constrain(potVal, 0, 100);
+        potVal = constrain(potVal, 0, 90);
 
-        // Se e il primo ciclo o se l'operatore sta muovendo il potenziometro (soglia Hysteresis del 3%)
-        if (this->lastPotValue == -1 || abs(potVal - this->lastPotValue) >= 3)
+        if (this->lastPotValue == -1 || this->lastPotValue != potVal)
+        {
+            this->lastPotValue = potVal; // Inizializza lastPotValue se è il primo ciclo
+        }
+        if (currentValveOpening != potVal && currentValveOpening != targetValveOpening)
         {
             currentValveOpening = potVal;
-            this->lastPotValue = potVal;
-            targetValveOpening = potVal; // Allinea anche il target desiderato
+            this->updateServoPosition(currentValveOpening);
         }
         else if (currentValveOpening != targetValveOpening)
         {
-            // Se il potenziometro e fermo ma e arrivato un comando dalla Dashboard (via CUS)
             currentValveOpening = targetValveOpening;
+            this->updateServoPosition(currentValveOpening);
         }
-        this->updateServoPosition(currentValveOpening);
+        else if (currentValveOpening != potVal)
+        {
+            currentValveOpening = potVal;
+            this->updateServoPosition(currentValveOpening);
+        }
         break;
     }
 
