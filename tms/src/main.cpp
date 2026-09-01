@@ -48,23 +48,8 @@ void setupWifi()
 {
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  vTaskDelay(pdMS_TO_TICKS(5000));
-  if (WiFi.status() == WL_CONNECTED)
-  {
-    state = NETWORK_ONLINE;
-    justEntered = true;
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-  }
-  else
-  {
-    state = NETWORK_OFFLINE;
-    justEntered = true;
-    Serial.println("");
-    Serial.println("WiFi connection failed on boot, will retry in background.");
-  }
+  state = NETWORK_OFFLINE;
+  justEntered = true;
 }
 
 void setupMqtt()
@@ -78,17 +63,12 @@ void reconnect()
   if (WiFi.status() != WL_CONNECTED)
   {
     Serial.println("Reconnecting to WiFi...");
-    WiFi.disconnect();
     WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED)
-    {
-      vTaskDelay(pdMS_TO_TICKS(5000));
-      Serial.print(".");
-    }
     Serial.println("\nWiFi reconnected.");
+    vTaskDelay(pdMS_TO_TICKS(5000));
   }
 
-  while (!client.connected())
+  if (!client.connected())
   {
     // Create a random client ID
     String clientId = String("clientId-") + String(random(0xffff), HEX);
@@ -97,10 +77,6 @@ void reconnect()
     if (client.connect(clientId.c_str()))
     {
       client.subscribe(topic);
-    }
-    else
-    {
-      vTaskDelay(pdMS_TO_TICKS(5000));
     }
   }
 }
@@ -156,13 +132,16 @@ void sensorTask(void *parameter)
     double tmp = sonar->getDistance();
     if (tmp > TANK_HEIGHT)
     {
-      waterLevel = 100.0;
+      tmp = 100.0;
+    }
+    else if (tmp < 0)
+    {
+      tmp = 0.0;
     }
     waterLevel = TANK_HEIGHT - tmp;
+    vTaskDelay(pdMS_TO_TICKS(300));
   }
-  vTaskDelay(pdMS_TO_TICKS(300));
 }
-
 
 void setup()
 {
