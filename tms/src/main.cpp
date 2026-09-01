@@ -113,6 +113,12 @@ void communicationTask(void *parameter)
     {
     case NETWORK_OFFLINE:
       reconnect();
+      if (justEntered)
+      {
+        ledRed->switchOn();
+        ledGreen->switchOff();
+        justEntered = false;
+      }
       if (client.connected() && WiFi.status() == WL_CONNECTED)
       {
         state = NETWORK_ONLINE;
@@ -121,6 +127,12 @@ void communicationTask(void *parameter)
       break;
     case NETWORK_ONLINE:
       client.loop();
+      if (justEntered)
+      {
+        ledRed->switchOff();
+        ledGreen->switchOn();
+        justEntered = false;
+      }
       if (millis() - lastMsgTime > 1000)
       {
         sendMessagge();
@@ -141,33 +153,16 @@ void sensorTask(void *parameter)
 {
   while (true)
   {
-    switch (state)
+    double tmp = sonar->getDistance();
+    if (tmp > TANK_HEIGHT)
     {
-    case NETWORK_OFFLINE:
-      if (justEntered)
-      {
-        ledRed->switchOn();
-        ledGreen->switchOff();
-        justEntered = false;
-      }
-      break;
-    case NETWORK_ONLINE:
-      if (justEntered)
-      {
-        ledRed->switchOff();
-        ledGreen->switchOn();
-        justEntered = false;
-      }
-      if(double tmp = sonar->getDistance() > TANK_HEIGHT){
-        waterLevel = 0.0;
-      } else {
-        waterLevel = TANK_HEIGHT - tmp;
-      }
-      break;
+      waterLevel = 100.0;
     }
-    vTaskDelay(pdMS_TO_TICKS(300));
+    waterLevel = TANK_HEIGHT - tmp;
   }
+  vTaskDelay(pdMS_TO_TICKS(300));
 }
+
 
 void setup()
 {
