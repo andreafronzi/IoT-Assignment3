@@ -14,8 +14,12 @@
 #define MSG_BUFFER_SIZE 50
 #define TANK_HEIGHT 100.0
 
-const char *ssid = "Wind3 HUB-D65C41";
+/*const char *ssid = "Wind3 HUB-D65C41";
 const char *password = "1s5gtr2si7f2adzp";
+*/
+
+const char *ssid = "WINDTRE-AC7DC8";
+const char *password = "8e8smdues3fyek4r";
 
 /* MQTT server address */
 const char *mqtt_server = "mqtt-dashboard.com";

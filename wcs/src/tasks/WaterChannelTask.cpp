@@ -22,18 +22,11 @@ WaterChannelTask::WaterChannelTask()
 
 void WaterChannelTask::tick()
 {
-    // 1. Gestione della pressione del pulsante per il cambio di modalita (supporta anche l'override da UNCONNECTED)
+    // 1. Gestione della pressione del pulsante per il cambio di modalita
     bool isButtonPressed = this->button->isPressed();
-    if (isButtonPressed && !lastButtonState)
+    if (isButtonPressed && !this->lastButtonState)
     {
-        if (currentState == AUTOMATIC || currentState == UNCONNECTED)
-        {
-            currentState = MANUAL;
-        }
-        else if (currentState == MANUAL)
-        {
-            currentState = AUTOMATIC;
-        }
+        intentToggleMode = true;
     }
     this->lastButtonState = isButtonPressed;
 
@@ -45,34 +38,33 @@ void WaterChannelTask::tick()
         int potVal = (int)(this->potentiometer->getValue() * 100.0);
         potVal = constrain(potVal, 0, 100);
 
-        // Se il potenziometro viene mosso in modo significativo (>= 2%), sovrascrive il target
-        if (this->lastPotValue == -1 || abs(this->lastPotValue - potVal) >= 2)
+        // Se il potenziometro viene mosso in modo significativo (>= 5%), sovrascrive il target
+        if (this->lastPotValue == -1 || abs(this->lastPotValue - potVal) >= 5)
         {
-            this->lastPotValue = potVal; 
+            this->lastPotValue = potVal;
+            intentSetValve = true;
+            requestedValveOpening = potVal;
             targetValveOpening = potVal;
         }
-
         currentValveOpening = targetValveOpening;
-        this->updateServoPosition(currentValveOpening);
-        
         break;
     }
 
     case AUTOMATIC:
         this->lastPotValue = -1; // Reset per reinizializzare alla rientrata in MANUAL
         currentValveOpening = targetValveOpening;
-        this->updateServoPosition(currentValveOpening);
         break;
 
     case UNCONNECTED:
         this->lastPotValue = -1;
         currentValveOpening = 0;
-        this->updateServoPosition(0);
         break;
 
     default:
         break;
     }
+    
+    this->updateServoPosition(currentValveOpening);
 }
 
 void WaterChannelTask::updateServoPosition(int percentage)

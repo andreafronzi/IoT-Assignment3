@@ -4,49 +4,101 @@ import backend.CusState;
 
 public class ArduinoData {
 
-    private double valve;
-    private CusState state;
+    // ==========================================================
+    // 1. DATI DI TELEMETRIA PASSIVA (Heartbeat da Arduino)
+    // Rispecchiano lo stato FISICO del sistema.
+    // 'volatile' garantisce la visibilità immediata tra thread.
+    // ==========================================================
+    private volatile CusState telemetryMode = CusState.AUTOMATIC;
+    private volatile double telemetryValve = 0.0;
 
-    private CusState currentState;
-    private double currentValve;
+    // ==========================================================
+    // 2. INTENTI (Richieste hardware o web)
+    // Usiamo metodi 'synchronized' per evitare Race Conditions.
+    // ==========================================================
+    private boolean intentToggleMode = false;
 
-    public ArduinoData() {
-        this.valve = 0.0;
-        this.state = CusState.UNCONNECTED;
-        this.currentState = CusState.UNCONNECTED;
-        this.currentValve = 0.0;
+    private boolean intentExplicitModeFlag = false;
+    private CusState intentExplicitModeValue = CusState.AUTOMATIC;
+
+    private boolean intentValveFlag = false;
+    private double intentValveValue = 0.0;
+
+    // --------------------------------------------------------
+    // METODI PER LA TELEMETRIA
+    // --------------------------------------------------------
+
+    public CusState getTelemetryMode() {
+        return telemetryMode;
     }
 
-    public double getValve() {
-        return valve;
+    public void setTelemetryMode(final CusState telemetryMode) {
+        this.telemetryMode = telemetryMode;
     }
 
-    public void setValve(final double valve) {
-        this.valve = valve;
+    public double getTelemetryValve() {
+        return telemetryValve;
     }
 
-    public CusState getCurrentState() {
-        return this.currentState;
+    public void setTelemetryValve(final double telemetryValve) {
+        this.telemetryValve = telemetryValve;
     }
 
-    public double getCurrentValve() {
-        return this.currentValve;
+    // --------------------------------------------------------
+    // METODI PER GLI INTENTI: CAMBIO MODALITÀ (Bottone Fisico)
+    // --------------------------------------------------------
+
+    public synchronized void setIntentToggleMode(final boolean val) {
+        this.intentToggleMode = val;
     }
 
-    public CusState getState() {
-        return state;
+    public synchronized boolean hasIntentToggleMode() {
+        return this.intentToggleMode;
     }
 
-    public void setState(final CusState state) {
-        this.state = state;
+    public synchronized void clearIntentToggleMode() {
+        this.intentToggleMode = false;
     }
 
-    public void setCurrent() {
-        this.currentState = CusState.valueOf(this.state.toString());
+    // --------------------------------------------------------
+    // METODI PER GLI INTENTI: MODALITÀ ESPLICITA (Dashboard Web)
+    // --------------------------------------------------------
+
+    public synchronized void setIntentExplicitMode(final CusState mode) {
+        this.intentExplicitModeValue = mode;
+        this.intentExplicitModeFlag = true;
     }
 
-    public void setCurrentValve() {
-        this.currentValve = this.valve;
+    public synchronized boolean hasIntentExplicitMode() {
+        return this.intentExplicitModeFlag;
     }
 
+    public synchronized CusState getIntentExplicitMode() {
+        return this.intentExplicitModeValue;
+    }
+
+    public synchronized void clearIntentExplicitMode() {
+        this.intentExplicitModeFlag = false;
+    }
+
+    // --------------------------------------------------------
+    // METODI PER GLI INTENTI: MOVIMENTO VALVOLA (Potenziometro/Web)
+    // --------------------------------------------------------
+
+    public synchronized void setIntentValve(double val) {
+        this.intentValveValue = val;
+        this.intentValveFlag = true;
+    }
+
+    public synchronized boolean hasIntentValve() {
+        return this.intentValveFlag;
+    }
+
+    public synchronized double getIntentValve() {
+        return this.intentValveValue;
+    }
+
+    public synchronized void clearIntentValve() {
+        this.intentValveFlag = false;
+    }
 }

@@ -9,7 +9,23 @@ CommunicationTask::CommunicationTask()
 void CommunicationTask::tick()
 {
     // ==========================================
-    // 1. RICEZIONE COMANDI DA CUS (Back-end)
+    // 1. INVIO INTENTI PENDENTI A CUS
+    // ==========================================
+    if (intentToggleMode)
+    {
+        String msg = "INTENT:TOGGLE_MODE";
+        MsgService.sendMsg(msg);
+        intentToggleMode = false; // Reset dell'intento dopo l'invio
+    }
+    if (intentSetValve)
+    {
+        String msg = "INTENT:SET_VALVE:" + String(requestedValveOpening);
+        MsgService.sendMsg(msg);
+        intentSetValve = false; // Reset dell'intento dopo l'invio
+    }
+
+    // ==========================================
+    // 2. RICEZIONE COMANDI DA CUS (Back-end)
     // ==========================================
     if (MsgService.isMsgAvailable())
     {
@@ -21,8 +37,7 @@ void CommunicationTask::tick()
             int val = content.substring(10).toInt();
             if (val >= 0 && val <= 100)
             {
-                // Questo valore viene utilizzato sia in AUTOMATIC che in MANUAL
-                targetValveOpening = static_cast<uint8_t>(val);
+                targetValveOpening = val;
             }
         }
         else if (content.startsWith("SET_MODE:"))
@@ -36,13 +51,18 @@ void CommunicationTask::tick()
             {
                 currentState = MANUAL;
             }
+            else if (modeStr == "UNCONNECTED")
+            {
+                currentState = UNCONNECTED;
+            }
         }
 
         delete msg; // IMPORTANTISSIMO: deallocare la memoria del messaggio per evitare memory leak!
     }
 
+
     // ==========================================
-    // 2. FASE DI TRASMISSIONE A CUS (Back-end)
+    // 3. FASE DI TRASMISSIONE A CUS (Back-end) PERIODICO
     // ==========================================
     unsigned long currentMillis = millis();
 
@@ -54,14 +74,20 @@ void CommunicationTask::tick()
         String stateStr = "";
         switch (currentState)
         {
-        case AUTOMATIC: stateStr = "AUTOMATIC"; break;
-        case MANUAL: stateStr = "MANUAL"; break;
-        case UNCONNECTED: stateStr = "UNCONNECTED"; break;
+        case AUTOMATIC:
+            stateStr = "AUTOMATIC";
+            break;
+        case MANUAL:
+            stateStr = "MANUAL";
+            break;
+        case UNCONNECTED:
+            stateStr = "UNCONNECTED";
+            break;
         }
 
-        String msg = "MODE:" + stateStr + "|VALVE:" + String(currentValveOpening);
-
-        // Invia il pacchetto completo al CUS
+        // Questo garantisce che Java e Dashboard sappiano esattamente 
+        // a che percentuale fisica si trova la valvola ogni mezzo secondo
+        String msg = "HEARTBEAT:MODE:" + stateStr + "|VALVE:" + String(currentValveOpening);
         MsgService.sendMsg(msg);
     }
 }
