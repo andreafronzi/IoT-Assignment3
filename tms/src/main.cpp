@@ -65,7 +65,6 @@ void reconnect()
 {
   if (WiFi.status() != WL_CONNECTED)
   {
-
     return;
   }
 
