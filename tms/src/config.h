@@ -15,7 +15,7 @@
 #define TANK_HEIGHT 100.0
 
 const char *ssid = "Wind3 HUB-D65C41";
-const char *password = "1s5gtr2si7f2adzp";
+const char *password = "non vi daro la mia password";
 
 /* MQTT server address */
 const char *mqtt_server = "mqtt-dashboard.com";
