@@ -21,7 +21,7 @@ void CommunicationTask::tick()
             int val = content.substring(10).toInt();
             if (val >= 0 && val <= 100)
             {
-                // non c'e bisogno di ulteriori controlli in quando questo valore viene letto esclusivamente nel momento in cui lo stato risulta AUTOMATIC
+                // Questo valore viene utilizzato sia in AUTOMATIC che in MANUAL
                 targetValveOpening = static_cast<uint8_t>(val);
             }
         }

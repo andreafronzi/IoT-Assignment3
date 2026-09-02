@@ -43,27 +43,18 @@ void WaterChannelTask::tick()
     {
         this->potentiometer->sync();
         int potVal = (int)(this->potentiometer->getValue() * 100.0);
-        potVal = constrain(potVal, 0, 90);
+        potVal = constrain(potVal, 0, 100);
 
-        if (this->lastPotValue == -1 || this->lastPotValue != potVal)
+        // Se il potenziometro viene mosso in modo significativo (>= 2%), sovrascrive il target
+        if (this->lastPotValue == -1 || abs(this->lastPotValue - potVal) >= 2)
         {
-            this->lastPotValue = potVal; // Inizializza lastPotValue se è il primo ciclo
+            this->lastPotValue = potVal; 
+            targetValveOpening = potVal;
         }
-        if (currentValveOpening != potVal && currentValveOpening != targetValveOpening)
-        {
-            currentValveOpening = potVal;
-            this->updateServoPosition(currentValveOpening);
-        }
-        else if (currentValveOpening != targetValveOpening)
-        {
-            currentValveOpening = targetValveOpening;
-            this->updateServoPosition(currentValveOpening);
-        }
-        else if (currentValveOpening != this->lastPotValue)
-        {
-            currentValveOpening = potVal;
-            this->updateServoPosition(currentValveOpening);
-        }
+
+        currentValveOpening = targetValveOpening;
+        this->updateServoPosition(currentValveOpening);
+        
         break;
     }
 
