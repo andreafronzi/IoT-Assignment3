@@ -11,7 +11,7 @@ typedef enum
   NETWORK_ONLINE,
 } communicationState;
 
-volatile communicationState state;
+communicationState state;
 
 TaskHandle_t communicationTaskHandle;
 TaskHandle_t sensorTaskHandle;
@@ -19,7 +19,9 @@ TaskHandle_t sensorTaskHandle;
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-volatile boolean justEntered;
+boolean justEntered;
+
+unsigned long lastWifiAttempt = 0;
 
 ProximitySensor *sonar;
 
@@ -28,7 +30,7 @@ Led *ledGreen;
 
 unsigned long lastMsgTime = 0;
 char msg[MSG_BUFFER_SIZE];
-volatile double waterLevel = 0.0;
+double waterLevel = 0.0;
 
 void sendMessagge()
 {
@@ -48,6 +50,7 @@ void setupWifi()
 {
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
+  WiFi.setAutoReconnect(true);
   state = NETWORK_OFFLINE;
   justEntered = true;
 }
@@ -62,10 +65,8 @@ void reconnect()
 {
   if (WiFi.status() != WL_CONNECTED)
   {
-    Serial.println("Reconnecting to WiFi...");
-    WiFi.begin(ssid, password);
-    Serial.println("\nWiFi reconnected.");
-    vTaskDelay(pdMS_TO_TICKS(5000));
+
+    return;
   }
 
   if (!client.connected())
@@ -121,7 +122,7 @@ void communicationTask(void *parameter)
       }
       break;
     }
-    vTaskDelay(pdMS_TO_TICKS(300));
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 
@@ -139,7 +140,7 @@ void sensorTask(void *parameter)
       tmp = 0.0;
     }
     waterLevel = TANK_HEIGHT - tmp;
-    vTaskDelay(pdMS_TO_TICKS(300));
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
 
