@@ -3,10 +3,16 @@
 
 Potentiometer::Potentiometer(int pin){
   this->pin = pin;
+  this->value = 0.0;
 } 
   
 void Potentiometer::sync(){
-  value = analogRead(pin);  
+  int current = analogRead(pin);
+  if (value == 0 && current != 0) { // rough check for first time
+      value = current;
+  } else {
+      value = 0.2 * current + 0.8 * value; // EMA smoothing
+  }
   updateSyncTime(millis());
 }
 

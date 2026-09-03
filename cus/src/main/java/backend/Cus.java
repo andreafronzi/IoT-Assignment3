@@ -7,30 +7,29 @@ import serialcommunication.SerialCommChannel;
 public class Cus {
 
     private CusState currentState = CusState.AUTOMATIC;
-
-    private SerialCommChannel serialChannel;
-
+    
+    private final SerialCommChannel serialChannel;
     private final EspData espData;
     private final ArduinoData arduinoData;
 
     private final double L1 = 60.0;
     private final double L2 = 75.0;
+    private final double T1 = 5000; // 5 secondi
+    private final long T2 = 10000;  // 10 secondi
 
-    private final double T1 = 5000; // 5 seconds above L1
-    private final long T2 = 10000; // 10 seconds without TMS data -> UNCONNECTED
-
-    private long lastTimeT1LevelExceeded;
-
+    private long lastTimeT1LevelExceeded = 0;
     private boolean isAboveL1 = false;
-
     private double rainLevel;
+
+    // FILTRI DELTA: Impediscono l'inondazione della seriale
+    private String lastSentValveLevel = "";
+    private String lastSentMode = "";
 
     private static final String VALVE_CLOSED = "0";
     private static final String VALVE_HALF_OPEN = "50";
     private static final String VALVE_FULL_OPEN = "100";
 
-    public Cus(final SerialCommChannel serialChannel, final EspData espData, final ArduinoData arduinoData)
-            throws Exception {
+    public Cus(final SerialCommChannel serialChannel, final EspData espData, final ArduinoData arduinoData) {
         this.serialChannel = serialChannel;
         this.espData = espData;
         this.arduinoData = arduinoData;
@@ -38,37 +37,29 @@ public class Cus {
     }
 
     public void run() {
+        // Invia lo stato iniziale per sincronizzare Arduino (Cold Start)
+        sendWcsMode(this.currentState.toString());
 
         while (true) {
-            System.out.println("Current state: " + this.currentState + ", Rain level: " + this.espData.getWaterLevel()
-                    + ", Arduino valve: " + this.arduinoData.getCurrentValve() + ", " + "Arduino state: "
-                    + this.arduinoData.getCurrentState() + ", Last tms update: "
-                    + (System.currentTimeMillis() - this.espData.getTime()) + " ms ago" + ", rainlevel: "
-                    + this.espData.getWaterLevel());
-            manageState();
-            manageValve();
             manageRainLevel();
+            checkConnection();
+            processIntents();
 
-            // Controllare connessione TMS
-            if (System.currentTimeMillis() - this.espData.getTime() > T2) {
-                this.currentState = CusState.UNCONNECTED;
-                sendWcsMode(this.currentState.toString());
-            }
-
-            // Operazioni sul wcs
             switch (this.currentState) {
                 case AUTOMATIC:
                     wcsUpdateAutomatic();
                     break;
                 case MANUAL:
-                    wcsUpdateManual();
+                    // In manuale la valvola viene mossa gestendo gli intenti (in processIntents).
+                    // Non serve inviare comandi ripetitivi qui.
                     break;
                 case UNCONNECTED:
                     wcsUpdateUnconnected();
                     break;
             }
+
             try {
-                Thread.sleep(100); // Delay di 1 secondo tra le iterazioni del ciclo
+                Thread.sleep(100); 
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -79,33 +70,77 @@ public class Cus {
         this.rainLevel = this.espData.getWaterLevel();
     }
 
-    private void manageState() {
-        this.arduinoData.setCurrent();
-        if (this.currentState != this.arduinoData.getCurrentState()) {
-            this.currentState = this.arduinoData.getCurrentState();
+    private void checkConnection() {
+        long timeSinceLastUpdate = System.currentTimeMillis() - this.espData.getTime();
+        
+        if (timeSinceLastUpdate > T2) {
+            if (this.currentState != CusState.UNCONNECTED) {
+                this.currentState = CusState.UNCONNECTED;
+                sendWcsMode(this.currentState.toString());
+                System.out.println("[CUS] Connessione persa (>" + T2 + "ms). Stato: UNCONNECTED");
+            }
+        } else if (this.currentState == CusState.UNCONNECTED) {
+            // Se i messaggi riprendono ad arrivare, usciamo da UNCONNECTED
+            this.currentState = CusState.AUTOMATIC;
             sendWcsMode(this.currentState.toString());
+            System.out.println("[CUS] Connessione ripristinata. Stato: AUTOMATIC");
         }
     }
 
-    private void manageValve() {
-        this.arduinoData.setCurrentValve();
+    private void processIntents() {
+        // 1. Gestione richiesta Bottone Fisico (Toggle)
+        if (this.arduinoData.hasIntentToggleMode()) {
+            if (this.currentState == CusState.AUTOMATIC || this.currentState == CusState.UNCONNECTED) {
+                this.currentState = CusState.MANUAL;
+            } else {
+                this.currentState = CusState.AUTOMATIC;
+            }
+            sendWcsMode(this.currentState.toString());
+            this.arduinoData.clearIntentToggleMode(); 
+        }
+
+        // 2. Gestione richiesta Web Dashboard (Esplicita)
+        if (this.arduinoData.hasIntentExplicitMode()) {
+            this.currentState = this.arduinoData.getIntentExplicitMode();
+            sendWcsMode(this.currentState.toString());
+            this.arduinoData.clearIntentExplicitMode();
+        }
+
+        // 3. Gestione richiesta Valvola (Sia da Web che da Potenziometro)
+        if (this.arduinoData.hasIntentValve()) {
+            if (this.currentState == CusState.MANUAL) {
+                double requestedValve = this.arduinoData.getIntentValve();
+                sendWcsValveLevel(String.valueOf((int) requestedValve));
+            }
+            this.arduinoData.clearIntentValve(); 
+        }
     }
 
     private void sendWcsValveLevel(final String valveLevel) {
-        this.serialChannel.sendMsg("SET_VALVE:" + valveLevel);
+        // FILTRO EDGE-TRIGGER: Scrive sulla Seriale SOLO se il comando è variato
+        if (!valveLevel.equals(this.lastSentValveLevel)) {
+            this.serialChannel.sendMsg("SET_VALVE:" + valveLevel);
+            this.lastSentValveLevel = valveLevel;
+            System.out.println("[CUS -> WCS] Valvola: " + valveLevel);
+        }
     }
 
     private void sendWcsMode(final String mode) {
-        this.serialChannel.sendMsg("SET_MODE:" + mode);
+        // FILTRO EDGE-TRIGGER: Scrive sulla Seriale SOLO se lo stato è variato
+        if (!mode.equals(this.lastSentMode)) {
+            this.serialChannel.sendMsg("SET_MODE:" + mode);
+            this.lastSentMode = mode;
+            System.out.println("[CUS -> WCS] Modalità: " + mode);
+        }
     }
 
     private void wcsUpdateAutomatic() {
-        // Controllare se il livello di pioggia è sopra L1 o L2
-        if (rainLevel > L2) {
-            // Inviare messaggio WCS per aprire valvola al 100%
+        if (rainLevel >= L2) {
             sendWcsValveLevel(VALVE_FULL_OPEN);
-        } else if (rainLevel > L1) {
-            // Inviare messaggio WCS per aprire valvola al 50%
+            this.isAboveL1 = false; 
+            this.lastTimeT1LevelExceeded = 0;
+        } 
+        else if (rainLevel >= L1) {
             if (!this.isAboveL1) {
                 this.isAboveL1 = true;
                 this.lastTimeT1LevelExceeded = System.currentTimeMillis();
@@ -114,20 +149,17 @@ public class Cus {
                     sendWcsValveLevel(VALVE_HALF_OPEN);
                 }
             }
-        } else {
-            // Inviare messaggio WCS per chiudere valvola
+        } 
+        else {
             this.isAboveL1 = false;
             this.lastTimeT1LevelExceeded = 0;
             sendWcsValveLevel(VALVE_CLOSED);
         }
     }
 
-    private void wcsUpdateManual() {
-        sendWcsValveLevel(Double.toString(this.arduinoData.getCurrentValve()));
-    }
-
     private void wcsUpdateUnconnected() {
-        // Inviare messaggio WCS per chiudere valvola
         sendWcsValveLevel(VALVE_CLOSED);
+        this.isAboveL1 = false;
+        this.lastTimeT1LevelExceeded = 0;
     }
 }

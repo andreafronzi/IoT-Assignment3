@@ -6,6 +6,8 @@ ControlLCDTask::ControlLCDTask()
     this->lcd = new LiquidCrystal_I2C(0x27, 16, 2);
     this->lcd->init();
     this->lcd->backlight();
+    this->last_state = (wcs_state_t)-1;
+    this->lastValveOpening = -1;
 }
 
 void ControlLCDTask::tick()

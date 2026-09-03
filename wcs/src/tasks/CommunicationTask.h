@@ -13,7 +13,7 @@ public:
 
 private:
    unsigned long lastTxTime;
-   const unsigned long TX_PERIOD = 300;
+   const unsigned long TX_PERIOD = 500;
 };
 
 #endif
