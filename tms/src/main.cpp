@@ -139,7 +139,7 @@ void sensorTask(void *parameter)
       tmp = 0.0;
     }
     waterLevel = TANK_HEIGHT - tmp;
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    vTaskDelay(pdMS_TO_TICKS(500));
   }
 }
 

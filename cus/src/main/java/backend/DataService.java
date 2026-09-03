@@ -24,11 +24,12 @@ public class DataService extends AbstractVerticle {
         this.arduinoData = arduinoData;
     }
 
-    @Override
+@Override
     public void start() {
         Router router = Router.router(vertx);
         router.route().handler(BodyHandler.create());
-        router.route("/*").handler(StaticHandler.create());
+        
+        router.route("/*").handler(StaticHandler.create("../dbs").setCachingEnabled(false));
         
         router.post("/api/data").handler(this::handleAddNewData);
         router.get("/api/data").handler(this::handleGetData);
@@ -40,12 +41,12 @@ public class DataService extends AbstractVerticle {
     private void handleAddNewData(final RoutingContext routingContext) {
         final HttpServerResponse response = routingContext.response();
         final JsonObject res = routingContext.getBodyAsJson();
-        
+
         if (Objects.isNull(res)) {
             sendError(400, response);
             return;
         }
-        
+
         // Il Frontend sottomette un Intento di cambio modalità
         if (res.containsKey("mode")) {
             try {
@@ -54,12 +55,12 @@ public class DataService extends AbstractVerticle {
                 System.err.println("Invalid mode received: " + res.getString("mode"));
             }
         }
-        
+
         // Il Frontend sottomette un Intento di posizionamento valvola
         if (res.containsKey("valve")) {
             this.arduinoData.setIntentValve(res.getDouble("valve"));
         }
-        
+
         response.setStatusCode(200).end();
     }
 
